@@ -15,7 +15,7 @@ pub fn run(cfg: &ListConfig) -> Result<()> {
     for sample in &samples {
         writeln!(out, "Sample: {}", sample.id)?;
         let rank_tokens = sample.header_rank_tokens();
-        writeln!(out, "  Ranks: {}", rank_tokens.join(", "))?;
+        writeln!(out, "  Ranks: {}", rank_tokens.join("|"))?;
         writeln!(out, "  Total taxa: {}", sample.entries.len())?;
 
         let mut stats: HashMap<usize, (usize, f64)> = HashMap::new();
