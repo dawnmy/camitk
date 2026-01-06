@@ -35,13 +35,7 @@ impl Sample {
     pub fn header_rank_tokens(&self) -> Vec<String> {
         self.rank_groups
             .iter()
-            .map(|group| {
-                if group.len() == 1 {
-                    group[0].clone()
-                } else {
-                    format!("{{{}}}", group.join(", "))
-                }
-            })
+            .map(|group| group.join(","))
             .collect()
     }
 
@@ -88,7 +82,18 @@ fn parse_rank_groups(spec: &str) -> Vec<Vec<String>> {
                         .collect();
                 }
             }
-            vec![trimmed.to_string()]
+            let names: Vec<String> = trimmed
+                .split(',')
+                .map(|name| name.trim().to_string())
+                .filter(|name| !name.is_empty())
+                .collect();
+            if names.is_empty() {
+                Vec::new()
+            } else if names.len() == 1 {
+                vec![trimmed.to_string()]
+            } else {
+                names
+            }
         })
         .collect()
 }
