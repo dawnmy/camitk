@@ -25,7 +25,7 @@ use commands::{
     author,
     version,
     about = "Explore and post-process CAMI profiling tables",
-    long_about = "cami reads CAMI-format abundance tables and provides commands to inspect, filter, and reshape them.",
+    long_about = "camitk reads CAMI-format abundance tables and provides commands to inspect, filter, and reshape them.",
     disable_help_subcommand = true
 )]
 struct Cli {
@@ -86,21 +86,21 @@ enum Commands {
             long = "af",
             value_name = "EXPR",
             help = "Filter expression applied to both ground truth and predicted profiles before scoring.",
-            long_help = "Expression syntax matches `cami filter`, combining rank (r), sample (s), abundance (a), taxonomy (t/tax), and cumulative-sum (c) predicates with & (and), | (or), and parentheses."
+            long_help = "Expression syntax matches `camitk filter`, combining rank (r), sample (s), abundance (a), taxonomy (t/tax), and cumulative-sum (c) predicates with & (and), | (or), and parentheses."
         )]
         all_filter: Option<String>,
         #[arg(
             long = "gf",
             value_name = "EXPR",
             help = "Filter expression applied to the ground truth profile before scoring.",
-            long_help = "Expression syntax matches `cami filter`, combining rank (r), sample (s), abundance (a), taxonomy (t/tax), and cumulative-sum (c) predicates with & (and), | (or), and parentheses."
+            long_help = "Expression syntax matches `camitk filter`, combining rank (r), sample (s), abundance (a), taxonomy (t/tax), and cumulative-sum (c) predicates with & (and), | (or), and parentheses."
         )]
         ground_filter: Option<String>,
         #[arg(
             long = "pf",
             value_name = "EXPR",
             help = "Filter expression applied to each predicted profile before scoring.",
-            long_help = "Expression syntax matches `cami filter`, combining rank (r), sample (s), abundance (a), taxonomy (t/tax), and cumulative-sum (c) predicates with & (and), | (or), and parentheses."
+            long_help = "Expression syntax matches `camitk filter`, combining rank (r), sample (s), abundance (a), taxonomy (t/tax), and cumulative-sum (c) predicates with & (and), | (or), and parentheses."
         )]
         pred_filter: Option<String>,
         #[arg(
@@ -136,7 +136,7 @@ enum Commands {
         #[arg(
             long = "dmp-dir",
             value_name = "DIR",
-            help = "Directory containing nodes.dmp and names.dmp (defaults to ~/.cami)."
+            help = "Directory containing nodes.dmp and names.dmp (defaults to ~/.camitk)."
         )]
         dmp_dir: Option<PathBuf>,
     },
@@ -162,7 +162,7 @@ enum Commands {
         output: Option<PathBuf>,
         #[arg(
             long,
-            help = "Fill in missing higher ranks using the NCBI taxdump (downloaded to ~/.cami if absent)."
+            help = "Fill in missing higher ranks using the NCBI taxdump (downloaded to ~/.camitk if absent)."
         )]
         fill_up: bool,
         #[arg(
@@ -191,7 +191,7 @@ enum Commands {
         #[arg(
             long = "dmp-dir",
             value_name = "DIR",
-            help = "Directory containing nodes.dmp and names.dmp (defaults to ~/.cami)."
+            help = "Directory containing nodes.dmp and names.dmp (defaults to ~/.camitk)."
         )]
         dmp_dir: Option<PathBuf>,
     },
@@ -268,7 +268,7 @@ enum Commands {
         #[arg(
             long = "dmp-dir",
             value_name = "DIR",
-            help = "Directory containing nodes.dmp and names.dmp (defaults to ~/.cami)."
+            help = "Directory containing nodes.dmp and names.dmp (defaults to ~/.camitk)."
         )]
         dmp_dir: Option<PathBuf>,
     },
@@ -329,7 +329,7 @@ enum Commands {
         #[arg(
             long = "dmp-dir",
             value_name = "DIR",
-            help = "Directory containing nodes.dmp and names.dmp (defaults to ~/.cami)."
+            help = "Directory containing nodes.dmp and names.dmp (defaults to ~/.camitk)."
         )]
         dmp_dir: Option<PathBuf>,
     },
