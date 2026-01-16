@@ -1,4 +1,4 @@
-use crate::camitk::{Entry, Sample};
+use crate::cami::{Entry, Sample};
 use crate::taxonomy::Taxonomy;
 use std::collections::{BTreeSet, HashMap};
 

@@ -1,4 +1,4 @@
-use crate::camitk::{Entry, Sample};
+use crate::cami::{Entry, Sample};
 use crate::taxonomy::Taxonomy;
 use anyhow::{Result, anyhow, bail};
 use regex::Regex;

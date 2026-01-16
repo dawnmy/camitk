@@ -7,8 +7,8 @@ use std::sync::Arc;
 
 use anyhow::{Context, Result, bail, ensure};
 
-use crate::camitk;
-use crate::camitk::{Entry, Sample};
+use crate::cami;
+use crate::cami::{Entry, Sample};
 use crate::expression::{apply_filter, expr_needs_taxdump, parse_expression};
 use crate::taxonomy::{Taxonomy, default_taxdump_dir, ensure_taxdump};
 

@@ -1,4 +1,4 @@
-mod camitk;
+mod cami;
 mod commands;
 mod expression;
 mod processing;
