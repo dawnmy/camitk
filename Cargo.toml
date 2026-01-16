@@ -1,5 +1,5 @@
 [package]
-name = "cami"
+name = "camitk"
 version = "0.7.7"
 edition = "2024"
 

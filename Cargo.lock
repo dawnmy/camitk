@@ -104,8 +104,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "b35204fbdc0b3f4446b89fc1ac2cf84a8a68971995d0bf2e925ec7cd960f9cb3"
 
 [[package]]
-name = "cami"
-version = "0.7.6"
+name = "camitk"
+version = "0.7.7"
 dependencies = [
  "anyhow",
  "clap",
