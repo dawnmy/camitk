@@ -1,6 +1,6 @@
 [package]
-name = "cami"
-version = "0.7.6"
+name = "camitk"
+version = "0.7.8"
 edition = "2024"
 
 [dependencies]
@@ -8,6 +8,6 @@ anyhow = "1"
 clap = { version = "4", features = ["derive"] }
 dirs = "4"
 flate2 = "1.0"
-reqwest = { version = "0.11", features = ["blocking", "rustls-tls"] }
+reqwest = { version = "0.11.27", default-features = false, features = ["blocking", "rustls-tls"] }
 tar = "0.4"
 regex = "1"

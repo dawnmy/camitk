@@ -276,6 +276,22 @@ fn build_rank_map(sample: &Sample, taxonomy: &Taxonomy, taxid: &str) -> Option<R
             });
         }
     }
+    if let Some(other_idx) = sample.rank_index("other entries") {
+        if map.get(&other_idx).is_none() {
+            if let Some((tid_u32, _, name)) =
+                lineage.iter().find(|(tid_u32, _, _)| *tid_u32 == 2_787_854)
+            {
+                map.insert(
+                    other_idx,
+                    RankDetail {
+                        rank: "other entries".to_string(),
+                        taxid: tid_u32.to_string(),
+                        name: name.clone(),
+                    },
+                );
+            }
+        }
+    }
     if map.is_empty() { None } else { Some(map) }
 }
 

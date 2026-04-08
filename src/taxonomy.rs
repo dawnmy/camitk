@@ -280,8 +280,8 @@ pub fn ensure_taxdump(dir: &Path) -> Result<()> {
 
 pub fn default_taxdump_dir() -> PathBuf {
     dirs::home_dir()
-        .map(|p| p.join(".cami"))
-        .unwrap_or_else(|| PathBuf::from(".cami"))
+        .map(|p| p.join(".camitk"))
+        .unwrap_or_else(|| PathBuf::from(".camitk"))
 }
 
 fn parse_nodes(path: &Path) -> Result<HashMap<u32, TaxNode>> {
