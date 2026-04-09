@@ -25,7 +25,7 @@ permissions:
   contents: write
 
 env:
-  BIN_NAME: cami
+  BIN_NAME: camitk
 
 jobs:
   build:
@@ -74,9 +74,9 @@ jobs:
         id: ver
         shell: bash
         run: |
-          VERSION=$(cargo metadata --format-version=1 --no-deps -q | jq -r '.packages[] | select(.name=="cami") | .version')
+          VERSION=$(cargo metadata --format-version=1 --no-deps -q | jq -r '.packages[] | select(.name=="camitk") | .version')
           if [ -z "$VERSION" ] || [ "$VERSION" = "null" ]; then
-            echo "Failed to get version for cami from cargo metadata"; exit 1
+            echo "Failed to get version for camitk from cargo metadata"; exit 1
           fi
           echo "version=$VERSION" >> "$GITHUB_OUTPUT"
 
@@ -118,18 +118,18 @@ jobs:
           VER="${{ steps.ver.outputs.version }}"
           ARCHIVE_NAME="${BIN_NAME}-v${VER}-${{ matrix.target }}.tar.gz"
 
-          # Stage a single binary named 'cami' (no enclosing folder)
+          # Stage a single binary named 'camitk' (no enclosing folder)
           BIN_PATH="target/${{ matrix.target }}/release/${BIN_NAME}"
           STAGE_DIR="dist/stage-${{ matrix.target }}"
           mkdir -p "$STAGE_DIR"
-          cp "$BIN_PATH" "$STAGE_DIR/cami"
+          cp "$BIN_PATH" "$STAGE_DIR/camitk"
 
           # Best-effort strip
-          strip "$STAGE_DIR/cami" || true
+          strip "$STAGE_DIR/camitk" || true
 
           # Create archive with just the binary at archive root
           mkdir -p dist
-          tar -C "$STAGE_DIR" -czf "dist/${ARCHIVE_NAME}" cami
+          tar -C "$STAGE_DIR" -czf "dist/${ARCHIVE_NAME}" camitk
 
       - name: Upload artifact
         uses: actions/upload-artifact@v4
