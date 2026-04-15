@@ -116,9 +116,18 @@ enum Commands {
         by_domain: bool,
         #[arg(
             long = "group-realms",
-            help = "Group viral realms under the Viruses superkingdom when scoring and filtering."
+            action = clap::ArgAction::SetTrue,
+            default_value_t = true,
+            help = "Group viral realms under the Viruses superkingdom when scoring and filtering (default: enabled)."
         )]
         group_realms: bool,
+        #[arg(
+            long = "no-group-realms",
+            action = clap::ArgAction::SetTrue,
+            conflicts_with = "group_realms",
+            help = "Disable viral realm grouping so realms are not folded into Viruses."
+        )]
+        no_group_realms: bool,
         #[arg(
             short = 'o',
             long = "output",
@@ -378,6 +387,7 @@ fn main() -> Result<()> {
             normalize,
             by_domain,
             group_realms,
+            no_group_realms,
             output,
             ranks,
             dmp_dir,
@@ -394,7 +404,7 @@ fn main() -> Result<()> {
                 pred_filter: pred_filter.clone(),
                 normalize: *normalize,
                 by_domain: *by_domain,
-                group_realms: *group_realms,
+                group_realms: *group_realms && !*no_group_realms,
                 output: output.clone(),
                 ranks: rank_vec,
                 dmp_dir: dmp_dir.clone(),
