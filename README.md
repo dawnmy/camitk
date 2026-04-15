@@ -191,6 +191,8 @@ camitk benchmark -g truth.cami predictions/profiler1.cami predictions/profiler2.
 - `-n, --normalize` rescales each sample/rank in every profile so positive abundances sum to 100 prior to computing metrics.
 - `--update-taxonomy` resolves every taxid through the NCBI merged and deleted node tables so profiles recorded against different taxonomy snapshots still align before scoring.
 - `--by-domain` produces additional TSV files restricted to Bacteria, Archaea, Eukarya, and Viruses alongside the overall report.
+- `--group-realms` groups viral realms under Viruses during scoring/filtering (enabled by default).
+- `--no-group-realms` disables viral realm grouping when you need strict lineage handling without realm folding.
 - `-o, --output` points to the directory where reports such as `benchmark.tsv` and `benchmark_bacteria.tsv` are written.
 - `-r, --ranks` restricts the evaluation to specific ranks; mix short forms (`p,c,g`) and full names (`phylum,class,genus`).
 
