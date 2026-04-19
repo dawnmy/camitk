@@ -23,6 +23,7 @@ pub struct BenchmarkConfig {
     pub pred_filter: Option<String>,
     pub normalize: bool,
     pub by_domain: bool,
+    pub detail: bool,
     pub group_realms: bool,
     pub output: PathBuf,
     pub ranks: Option<Vec<String>>,
@@ -32,6 +33,7 @@ pub struct BenchmarkConfig {
 #[derive(Clone)]
 struct ProfileEntry {
     taxid: String,
+    taxon: String,
     percentage: f64,
     lineage: Arc<[Option<String>]>,
 }
@@ -161,6 +163,19 @@ pub fn run(cfg: &BenchmarkConfig) -> Result<()> {
             writer,
             "profile\tsample\trank\ttp\tfp\tfn\tprecision\trecall\tf1\tjaccard\tl1_error\tbray_curtis\tshannon_pred\tshannon_truth\tevenness_pred\tevenness_truth\tpearson\tspearman\tweighted_unifrac\tunweighted_unifrac\tabundance_rank_error\tmass_weighted_abundance_rank_error"
         )?;
+        let mut detail_writer = if cfg.detail {
+            let detail_path = cfg.output.join(format!("benchmark_details{}.tsv", suffix));
+            let mut detail_file = File::create(&detail_path).with_context(|| {
+                format!("creating benchmark detail report {}", detail_path.display())
+            })?;
+            writeln!(
+                detail_file,
+                "profile\tsample\ttype\trank\ttaxon\ttaxid\tabundance_pred\tabundance_true"
+            )?;
+            Some(detail_file)
+        } else {
+            None
+        };
 
         let gt_map = build_profile_map(
             &gt_samples,
@@ -221,6 +236,16 @@ pub fn run(cfg: &BenchmarkConfig) -> Result<()> {
                         .unwrap_or(&[]);
                     let metrics = compute_metrics(&rank, gt_entries, pred_entries)?;
                     write_metrics(&mut writer, label, sample_id, &rank, &metrics)?;
+                    if let Some(detail_writer) = detail_writer.as_mut() {
+                        write_detail_rows(
+                            detail_writer,
+                            label,
+                            sample_id,
+                            &rank,
+                            gt_entries,
+                            pred_entries,
+                        )?;
+                    }
                 }
             }
         }
@@ -308,6 +333,7 @@ fn build_profile_map(
                 .or_default()
                 .push(ProfileEntry {
                     taxid: entry.taxid.clone(),
+                    taxon: entry_taxon_name(entry),
                     percentage: entry.percentage,
                     lineage,
                 });
@@ -1735,6 +1761,71 @@ fn write_metrics<W: Write>(
     Ok(())
 }
 
+fn entry_taxon_name(entry: &Entry) -> String {
+    split_taxpath(&entry.taxpathsn)
+        .last()
+        .cloned()
+        .filter(|part| !part.trim().is_empty())
+        .unwrap_or_else(|| entry.taxid.clone())
+}
+
+fn write_detail_rows<W: Write>(
+    writer: &mut W,
+    label: &str,
+    sample: &str,
+    rank: &str,
+    gt_entries: &[ProfileEntry],
+    pred_entries: &[ProfileEntry],
+) -> Result<()> {
+    let gt_map = summarize_entries(gt_entries);
+    let pred_map = summarize_entries(pred_entries);
+    let all_taxa: BTreeSet<String> = gt_map.keys().chain(pred_map.keys()).cloned().collect();
+
+    for taxid in all_taxa {
+        let gt_item = gt_map.get(&taxid);
+        let pred_item = pred_map.get(&taxid);
+        let taxon = pred_item
+            .map(|item| item.0.clone())
+            .or_else(|| gt_item.map(|item| item.0.clone()))
+            .unwrap_or_else(|| taxid.clone());
+        let kind = match (pred_item, gt_item) {
+            (Some(_), Some(_)) => "tp",
+            (Some(_), None) => "fp",
+            (None, Some(_)) => "fn",
+            (None, None) => continue,
+        };
+        let pred_value = pred_item.map(|(_, abundance)| format_float(*abundance));
+        let gt_value = gt_item.map(|(_, abundance)| format_float(*abundance));
+        writeln!(
+            writer,
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            label,
+            sample,
+            kind,
+            rank,
+            taxon,
+            taxid,
+            pred_value.unwrap_or_default(),
+            gt_value.unwrap_or_default()
+        )?;
+    }
+    Ok(())
+}
+
+fn summarize_entries(entries: &[ProfileEntry]) -> HashMap<String, (String, f64)> {
+    let mut grouped: HashMap<String, (String, f64)> = HashMap::new();
+    for entry in entries {
+        let row = grouped
+            .entry(entry.taxid.clone())
+            .or_insert_with(|| (entry.taxon.clone(), 0.0));
+        if row.0.is_empty() {
+            row.0 = entry.taxon.clone();
+        }
+        row.1 += entry.percentage;
+    }
+    grouped
+}
+
 fn format_opt(value: Option<f64>) -> String {
     value
         .map(|v| format_float(v))
@@ -1889,6 +1980,7 @@ mod tests {
         let lineage = Arc::from(compute_lineage(&entry, &rank, None, false).into_boxed_slice());
         ProfileEntry {
             taxid: entry.taxid.clone(),
+            taxon: entry.taxid.clone(),
             percentage,
             lineage,
         }
@@ -1951,11 +2043,13 @@ mod tests {
         };
         let gt = vec![ProfileEntry {
             taxid: gt_entry.taxid.clone(),
+            taxon: "Species alpha".to_string(),
             percentage: gt_entry.percentage,
             lineage: Arc::from(compute_lineage(&gt_entry, rank, None, false).into_boxed_slice()),
         }];
         let pred = vec![ProfileEntry {
             taxid: pred_entry.taxid.clone(),
+            taxon: "Species beta".to_string(),
             percentage: pred_entry.percentage,
             lineage: Arc::from(compute_lineage(&pred_entry, rank, None, false).into_boxed_slice()),
         }];
