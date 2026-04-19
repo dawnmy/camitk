@@ -191,6 +191,7 @@ camitk benchmark -g truth.cami predictions/profiler1.cami predictions/profiler2.
 - `-n, --normalize` rescales each sample/rank in every profile so positive abundances sum to 100 prior to computing metrics.
 - `--update-taxonomy` resolves every taxid through the NCBI merged and deleted node tables so profiles recorded against different taxonomy snapshots still align before scoring.
 - `--by-domain` produces additional TSV files restricted to Bacteria, Archaea, Eukarya, and Viruses alongside the overall report.
+- `--detail` (alias `--verbose`) also writes per-taxon TP/FP/FN tables (`benchmark_details*.tsv`) with both predicted and ground-truth abundances when available.
 - `--group-realms` groups viral realms under Viruses during scoring/filtering (enabled by default).
 - `--no-group-realms` disables viral realm grouping when you need strict lineage handling without realm folding.
 - `-o, --output` points to the directory where reports such as `benchmark.tsv` and `benchmark_bacteria.tsv` are written.
@@ -201,6 +202,15 @@ Each TSV contains one row per profile/sample/rank combination:
 ```text
 profile   sample   rank     tp  fp  fn  precision  recall   f1        jaccard  l1_error  bray_curtis  shannon_pred  shannon_truth  evenness_pred  evenness_truth  pearson  spearman  weighted_unifrac  unweighted_unifrac  abundance_rank_error  mass_weighted_abundance_rank_error
 profiler1 s1       species  42  5   3   0.893617   0.933333  0.913043  0.777778 4.210000  0.021053     2.271111      2.318765      0.932842       0.950112        0.981000 0.975000 0.042000           0.018519              0.052632              0.041875
+```
+
+When `--detail` is enabled, CAMITK also writes a long-form file with one row per taxon classification outcome (`tp`, `fp`, `fn`):
+
+```text
+profile   sample   type  rank     taxon         taxid   abundance_pred  abundance_true
+profiler1 s1       tp    species  Escherichia   562     12.34000        10.12000
+profiler1 s1       fp    species  Unknown_taxon 999999  0.75000
+profiler1 s1       fn    species  Bacillus      1386                   1.25000
 ```
 
 ### UniFrac normalization in camitk benchmark

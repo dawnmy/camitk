@@ -115,6 +115,12 @@ enum Commands {
         )]
         by_domain: bool,
         #[arg(
+            long = "detail",
+            visible_alias = "verbose",
+            help = "Write per-taxon TP/FP/FN rows with predicted and/or ground-truth abundances."
+        )]
+        detail: bool,
+        #[arg(
             long = "group-realms",
             action = clap::ArgAction::SetTrue,
             default_value_t = true,
@@ -386,6 +392,7 @@ fn main() -> Result<()> {
             pred_filter,
             normalize,
             by_domain,
+            detail,
             group_realms,
             no_group_realms,
             output,
@@ -404,6 +411,7 @@ fn main() -> Result<()> {
                 pred_filter: pred_filter.clone(),
                 normalize: *normalize,
                 by_domain: *by_domain,
+                detail: *detail,
                 group_realms: *group_realms && !*no_group_realms,
                 output: output.clone(),
                 ranks: rank_vec,
