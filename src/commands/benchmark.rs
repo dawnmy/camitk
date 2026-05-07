@@ -1,5 +1,5 @@
 use std::cmp::Ordering;
-use std::collections::{BTreeSet, HashMap};
+use std::collections::{BTreeSet, HashMap, HashSet};
 use std::fs::{self, File};
 use std::io::Write;
 use std::path::{Path, PathBuf};
@@ -23,6 +23,7 @@ pub struct BenchmarkConfig {
     pub pred_filter: Option<String>,
     pub normalize: bool,
     pub by_domain: bool,
+    pub detail: bool,
     pub group_realms: bool,
     pub output: PathBuf,
     pub ranks: Option<Vec<String>>,
@@ -32,6 +33,7 @@ pub struct BenchmarkConfig {
 #[derive(Clone)]
 struct ProfileEntry {
     taxid: String,
+    taxon: String,
     percentage: f64,
     lineage: Arc<[Option<String>]>,
 }
@@ -161,6 +163,19 @@ pub fn run(cfg: &BenchmarkConfig) -> Result<()> {
             writer,
             "profile\tsample\trank\ttp\tfp\tfn\tprecision\trecall\tf1\tjaccard\tl1_error\tbray_curtis\tshannon_pred\tshannon_truth\tevenness_pred\tevenness_truth\tpearson\tspearman\tweighted_unifrac\tunweighted_unifrac\tabundance_rank_error\tmass_weighted_abundance_rank_error"
         )?;
+        let mut detail_writer = if cfg.detail {
+            let detail_path = cfg.output.join(format!("benchmark_details{}.tsv", suffix));
+            let mut detail_file = File::create(&detail_path).with_context(|| {
+                format!("creating benchmark detail report {}", detail_path.display())
+            })?;
+            writeln!(
+                detail_file,
+                "profile\tsample\ttype\trank\ttaxon\ttaxid\tabundance_pred\tabundance_true"
+            )?;
+            Some(detail_file)
+        } else {
+            None
+        };
 
         let gt_map = build_profile_map(
             &gt_samples,
@@ -221,6 +236,16 @@ pub fn run(cfg: &BenchmarkConfig) -> Result<()> {
                         .unwrap_or(&[]);
                     let metrics = compute_metrics(&rank, gt_entries, pred_entries)?;
                     write_metrics(&mut writer, label, sample_id, &rank, &metrics)?;
+                    if let Some(detail_writer) = detail_writer.as_mut() {
+                        write_detail_rows(
+                            detail_writer,
+                            label,
+                            sample_id,
+                            &rank,
+                            gt_entries,
+                            pred_entries,
+                        )?;
+                    }
                 }
             }
         }
@@ -308,6 +333,7 @@ fn build_profile_map(
                 .or_default()
                 .push(ProfileEntry {
                     taxid: entry.taxid.clone(),
+                    taxon: entry_taxon_name(entry),
                     percentage: entry.percentage,
                     lineage,
                 });
@@ -353,6 +379,7 @@ fn entry_domain_candidates(
     group_realms: bool,
 ) -> Vec<String> {
     let mut candidates: Vec<String> = Vec::new();
+    let mut seen_taxids: HashSet<u32> = HashSet::new();
 
     let mut push_candidate = |value: String| {
         if !candidates
@@ -363,48 +390,106 @@ fn entry_domain_candidates(
         }
     };
 
-    for component in entry.taxpathsn.split('|') {
-        if let Some(name) = canonical_domain_name(component, group_realms) {
+    let mut visit_taxid = |tid: u32| {
+        if !seen_taxids.insert(tid) {
+            return;
+        }
+        if let Some(name) = classify_domain_from_taxid(tid, taxonomy, group_realms) {
             push_candidate(name);
         }
+    };
+
+    if let Some(tid) = resolve_taxid_text(&entry.taxid, taxonomy) {
+        visit_taxid(tid);
     }
 
-    if group_realms {
-        if entry.taxid.trim() == "10239" {
-            push_candidate("Viruses".to_string());
-        }
+    if let Some(tid) = first_taxid_in_taxpath(entry, taxonomy) {
+        visit_taxid(tid);
+    }
+
+    if let Some(tid) = highest_taxid_in_taxpath(entry, taxonomy) {
+        visit_taxid(tid);
+    }
+
+    if taxonomy.is_none() {
         for component in split_taxpath(&entry.taxpath) {
-            if component.trim() == "10239" {
+            if let Some(tid) = resolve_taxid_text(&component, None) {
+                visit_taxid(tid);
+            }
+        }
+        if group_realms {
+            if entry.taxid.trim() == "10239" {
                 push_candidate("Viruses".to_string());
             }
-        }
-    }
-
-    if let Some(tax) = taxonomy {
-        let mut visit_taxid = |tid: u32| {
-            if let Some(name) = tax.domain_of(tid) {
-                if let Some(normalized) = canonical_domain_name(&name, group_realms) {
-                    push_candidate(normalized);
+            for component in split_taxpath(&entry.taxpath) {
+                if component.trim() == "10239" {
+                    push_candidate("Viruses".to_string());
                 }
             }
-            if group_realms {
-                if let Some(realm) = tax.realm_of(tid) {
-                    if component_is_virus_realm(&realm) {
-                        push_candidate("Viruses".to_string());
-                    }
-                }
-            }
-        };
-
-        if let Some(tid) = highest_taxid_in_taxpath(entry, Some(tax)) {
-            visit_taxid(tid);
         }
+    } else if let Some(tax) = taxonomy {
         if let Some(tid) = tax.resolve_taxid_str(&entry.taxid) {
             visit_taxid(tid);
         }
     }
 
     candidates
+}
+
+fn resolve_taxid_text(value: &str, taxonomy: Option<&Taxonomy>) -> Option<u32> {
+    let raw = value.trim().parse::<u32>().ok().filter(|id| *id > 1)?;
+    match taxonomy {
+        Some(tax) => tax.resolve_taxid(raw),
+        None => Some(raw),
+    }
+}
+
+fn first_taxid_in_taxpath(entry: &Entry, taxonomy: Option<&Taxonomy>) -> Option<u32> {
+    split_taxpath(&entry.taxpath)
+        .into_iter()
+        .find_map(|component| resolve_taxid_text(&component, taxonomy))
+}
+
+fn classify_domain_from_taxid(
+    taxid: u32,
+    taxonomy: Option<&Taxonomy>,
+    group_realms: bool,
+) -> Option<String> {
+    if taxid == 10239 {
+        return Some("Viruses".to_string());
+    }
+
+    let map_domain_taxid = |tid: u32| match tid {
+        2 => Some("Bacteria".to_string()),
+        2157 => Some("Archaea".to_string()),
+        2759 => Some("Eukarya".to_string()),
+        10239 => Some("Viruses".to_string()),
+        _ => None,
+    };
+
+    if let Some(tax) = taxonomy {
+        if group_realms {
+            if let Some(realm) = tax.realm_of(taxid) {
+                if component_is_virus_realm(&realm) {
+                    return Some("Viruses".to_string());
+                }
+            }
+        }
+
+        let lineage = tax.lineage(taxid);
+        for (tid, rank, _) in lineage.iter() {
+            if rank.eq_ignore_ascii_case("superkingdom")
+                || rank.eq_ignore_ascii_case("domain")
+                || rank.eq_ignore_ascii_case("acellular root")
+            {
+                if let Some(domain) = map_domain_taxid(*tid) {
+                    return Some(domain);
+                }
+            }
+        }
+    }
+
+    map_domain_taxid(taxid)
 }
 
 fn canonical_domain_name(raw: &str, group_realms: bool) -> Option<String> {
@@ -1676,6 +1761,71 @@ fn write_metrics<W: Write>(
     Ok(())
 }
 
+fn entry_taxon_name(entry: &Entry) -> String {
+    split_taxpath(&entry.taxpathsn)
+        .last()
+        .cloned()
+        .filter(|part| !part.trim().is_empty())
+        .unwrap_or_else(|| entry.taxid.clone())
+}
+
+fn write_detail_rows<W: Write>(
+    writer: &mut W,
+    label: &str,
+    sample: &str,
+    rank: &str,
+    gt_entries: &[ProfileEntry],
+    pred_entries: &[ProfileEntry],
+) -> Result<()> {
+    let gt_map = summarize_entries(gt_entries);
+    let pred_map = summarize_entries(pred_entries);
+    let all_taxa: BTreeSet<String> = gt_map.keys().chain(pred_map.keys()).cloned().collect();
+
+    for taxid in all_taxa {
+        let gt_item = gt_map.get(&taxid);
+        let pred_item = pred_map.get(&taxid);
+        let taxon = pred_item
+            .map(|item| item.0.clone())
+            .or_else(|| gt_item.map(|item| item.0.clone()))
+            .unwrap_or_else(|| taxid.clone());
+        let kind = match (pred_item, gt_item) {
+            (Some(_), Some(_)) => "tp",
+            (Some(_), None) => "fp",
+            (None, Some(_)) => "fn",
+            (None, None) => continue,
+        };
+        let pred_value = pred_item.map(|(_, abundance)| format_float(*abundance));
+        let gt_value = gt_item.map(|(_, abundance)| format_float(*abundance));
+        writeln!(
+            writer,
+            "{}\t{}\t{}\t{}\t{}\t{}\t{}\t{}",
+            label,
+            sample,
+            kind,
+            rank,
+            taxon,
+            taxid,
+            pred_value.unwrap_or_default(),
+            gt_value.unwrap_or_default()
+        )?;
+    }
+    Ok(())
+}
+
+fn summarize_entries(entries: &[ProfileEntry]) -> HashMap<String, (String, f64)> {
+    let mut grouped: HashMap<String, (String, f64)> = HashMap::new();
+    for entry in entries {
+        let row = grouped
+            .entry(entry.taxid.clone())
+            .or_insert_with(|| (entry.taxon.clone(), 0.0));
+        if row.0.is_empty() {
+            row.0 = entry.taxon.clone();
+        }
+        row.1 += entry.percentage;
+    }
+    grouped
+}
+
 fn format_opt(value: Option<f64>) -> String {
     value
         .map(|v| format_float(v))
@@ -1690,13 +1840,17 @@ fn format_float(value: f64) -> String {
 mod tests {
     use super::{
         CANONICAL_RANKS, LineageInfo, ProfileEntry, abundance_rank_error, canonical_rank_index,
-        compute_lineage, ensure_superkingdom_only, entry_missing_superkingdom,
-        highest_taxid_in_taxpath, mass_weighted_abundance_rank_error, samples_need_superkingdom,
-        unifrac, unifrac_components,
+        compute_lineage, ensure_superkingdom_only, entry_belongs_to_domain,
+        entry_missing_superkingdom, highest_taxid_in_taxpath, mass_weighted_abundance_rank_error,
+        samples_need_superkingdom, unifrac, unifrac_components,
     };
     use crate::cami::{Entry, Sample};
+    use crate::taxonomy::Taxonomy;
     use std::collections::HashMap;
+    use std::fs;
+    use std::path::PathBuf;
     use std::sync::Arc;
+    use std::time::{SystemTime, UNIX_EPOCH};
 
     fn map(entries: &[(&str, f64)]) -> HashMap<String, f64> {
         entries
@@ -1826,6 +1980,7 @@ mod tests {
         let lineage = Arc::from(compute_lineage(&entry, &rank, None, false).into_boxed_slice());
         ProfileEntry {
             taxid: entry.taxid.clone(),
+            taxon: entry.taxid.clone(),
             percentage,
             lineage,
         }
@@ -1888,11 +2043,13 @@ mod tests {
         };
         let gt = vec![ProfileEntry {
             taxid: gt_entry.taxid.clone(),
+            taxon: "Species alpha".to_string(),
             percentage: gt_entry.percentage,
             lineage: Arc::from(compute_lineage(&gt_entry, rank, None, false).into_boxed_slice()),
         }];
         let pred = vec![ProfileEntry {
             taxid: pred_entry.taxid.clone(),
+            taxon: "Species beta".to_string(),
             percentage: pred_entry.percentage,
             lineage: Arc::from(compute_lineage(&pred_entry, rank, None, false).into_boxed_slice()),
         }];
@@ -2045,5 +2202,110 @@ mod tests {
         };
 
         assert_eq!(highest_taxid_in_taxpath(&entry, None), Some(12_345));
+    }
+
+    fn write_test_taxdump_dir() -> PathBuf {
+        let now = SystemTime::now()
+            .duration_since(UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_nanos();
+        let dir = std::env::temp_dir().join(format!("camitk-benchmark-tests-{now}"));
+        fs::create_dir_all(&dir).unwrap();
+        fs::write(
+            dir.join("nodes.dmp"),
+            concat!(
+                "1 | 1 | no rank |\n",
+                "2 | 1 | superkingdom |\n",
+                "10239 | 1 | acellular root |\n",
+                "2731618 | 10239 | species |\n"
+            ),
+        )
+        .unwrap();
+        fs::write(
+            dir.join("names.dmp"),
+            concat!(
+                "1 | root | | scientific name |\n",
+                "2 | Bacteria | | scientific name |\n",
+                "10239 | Viruses | | scientific name |\n",
+                "2731618 | Bacterial viruses | | scientific name |\n"
+            ),
+        )
+        .unwrap();
+        dir
+    }
+
+    #[test]
+    fn by_domain_uses_taxonomy_taxid_not_taxpathsn_text() {
+        let taxdump = write_test_taxdump_dir();
+        let taxonomy = Taxonomy::load(&taxdump).unwrap();
+        let entry = Entry {
+            taxid: "2731618".to_string(),
+            rank: "species".to_string(),
+            taxpath: "10239|2731618".to_string(),
+            taxpathsn: "Bacterial viruses|Some species".to_string(),
+            percentage: 1.0,
+            cami_genome_id: None,
+            cami_otu: None,
+            hosts: None,
+        };
+
+        assert!(!entry_belongs_to_domain(
+            &entry,
+            "Bacteria",
+            Some(&taxonomy),
+            false
+        ));
+        assert!(entry_belongs_to_domain(
+            &entry,
+            "Viruses",
+            Some(&taxonomy),
+            false
+        ));
+    }
+
+    #[test]
+    fn by_domain_can_use_first_taxpath_taxid_without_taxonomy() {
+        let entry = Entry {
+            taxid: "2731618".to_string(),
+            rank: "species".to_string(),
+            taxpath: "10239|2731618".to_string(),
+            taxpathsn: "Bacterial viruses|Some species".to_string(),
+            percentage: 1.0,
+            cami_genome_id: None,
+            cami_otu: None,
+            hosts: None,
+        };
+
+        assert!(!entry_belongs_to_domain(&entry, "Bacteria", None, false));
+        assert!(entry_belongs_to_domain(&entry, "Viruses", None, false));
+    }
+
+    #[test]
+    fn by_domain_with_group_realms_is_compatible_with_old_taxdump_without_realm_rank() {
+        let taxdump = write_test_taxdump_dir();
+        let taxonomy = Taxonomy::load(&taxdump).unwrap();
+        let entry = Entry {
+            taxid: "2731618".to_string(),
+            rank: "species".to_string(),
+            taxpath: "10239|2731618".to_string(),
+            taxpathsn: "Bacterial viruses|Some species".to_string(),
+            percentage: 1.0,
+            cami_genome_id: None,
+            cami_otu: None,
+            hosts: None,
+        };
+
+        assert!(entry_belongs_to_domain(
+            &entry,
+            "Viruses",
+            Some(&taxonomy),
+            true
+        ));
+        assert!(!entry_belongs_to_domain(
+            &entry,
+            "Bacteria",
+            Some(&taxonomy),
+            true
+        ));
     }
 }

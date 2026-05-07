@@ -115,10 +115,17 @@ enum Commands {
         )]
         by_domain: bool,
         #[arg(
-            long = "group-realms",
-            help = "Group viral realms under the Viruses superkingdom when scoring and filtering."
+            long = "detail",
+            visible_alias = "verbose",
+            help = "Write per-taxon TP/FP/FN rows with predicted and/or ground-truth abundances."
         )]
-        group_realms: bool,
+        detail: bool,
+        #[arg(
+            long = "no-group-realms",
+            action = clap::ArgAction::SetTrue,
+            help = "Disable viral realm grouping so realms are not folded into Viruses."
+        )]
+        no_group_realms: bool,
         #[arg(
             short = 'o',
             long = "output",
@@ -377,7 +384,8 @@ fn main() -> Result<()> {
             pred_filter,
             normalize,
             by_domain,
-            group_realms,
+            detail,
+            no_group_realms,
             output,
             ranks,
             dmp_dir,
@@ -394,7 +402,8 @@ fn main() -> Result<()> {
                 pred_filter: pred_filter.clone(),
                 normalize: *normalize,
                 by_domain: *by_domain,
-                group_realms: *group_realms,
+                detail: *detail,
+                group_realms: !*no_group_realms,
                 output: output.clone(),
                 ranks: rank_vec,
                 dmp_dir: dmp_dir.clone(),
